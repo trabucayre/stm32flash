@@ -3,6 +3,8 @@ AR = $(CROSS_COMPILE)ar
 export CC
 export AR
 
+UNAME_S := $(shell uname -s)
+
 CCFLAGS = -Wall
 ifeq ($(UNAME_S),Darwin)
 CCFLAGS += -mmacosx-version-min=10.6 
