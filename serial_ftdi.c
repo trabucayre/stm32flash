@@ -35,7 +35,9 @@
 
 #include "serial.h"
 
-#define TIOCM_CBUS 0x545E // to use ioctl for CBUS pins
+#define CBUS_DIR    0xF0
+#define RST         0x04
+#define BOOT0       0x02
 
 struct serial {
 	int			fd;
@@ -214,6 +216,9 @@ void serial_close(serial_t *h) {
 	assert(h && h->ftdi !=NULL);
 	struct ftdi_context *ftdi = h->ftdi;
 	int rtn;
+
+	serial_set_cbus(h, CBUS_DIR);
+
 	ftdi_usb_purge_tx_buffer(h->ftdi); 
 	ftdi_usb_purge_rx_buffer(h->ftdi); 
 
@@ -331,8 +336,6 @@ serial_err_t serial_setup(serial_t *h, const serial_baud_t baud,
 	h->ftdi->usb_read_timeout = 10000;
 	ftdi_write_data_set_chunksize(h->ftdi, 512);
 
-	//ftdi_set_bitmode(h->ftdi, bitmask, BITMODE_CBUS);
-
 	return SERIAL_ERR_OK;
 }
 
@@ -399,3 +402,38 @@ const char* serial_get_setup_str(const serial_t *h) {
 	return str;
 }
 
+void ftdi_send_reset(const serial_t *serial, int cbus)
+{
+	// 1 : reset 0
+	cbus |= RST;
+	serial_set_cbus(serial, cbus);
+	usleep(100);
+	// 2 : reset 1
+	cbus &= ~RST;
+	serial_set_cbus(serial, cbus);
+	usleep(100);
+}
+
+void ftdi_bootloader(const serial_t *serial, int cbus)
+{
+	// 1 : gestion de BOOT0 CBUS1
+	cbus |= BOOT0;
+	serial_set_cbus(serial, cbus);
+	usleep(100);
+	// 2 : reset 0
+	ftdi_send_reset(serial, cbus);
+	// 3 : BOOT0 0
+	cbus &= ~BOOT0;
+	serial_set_cbus(serial, cbus);
+	usleep(600000);
+}
+
+serial_err_t serial_reset(const serial_t *serial, int dtr)
+{
+	if (dtr == 0)
+		ftdi_bootloader(serial, CBUS_DIR);
+	else
+		ftdi_send_reset(serial, CBUS_DIR);
+
+	return SERIAL_ERR_OK;
+}
